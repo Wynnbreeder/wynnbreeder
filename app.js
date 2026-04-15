@@ -622,6 +622,18 @@ async function onCalculate() {
   }
 }
 
+function incrementOpenCounter() {
+  const countElement = typeof document !== "undefined" ? document.getElementById("siteOpenCount") : null;
+  if (!countElement) {
+    return;
+  }
+  
+  let count = localStorage.getItem("siteOpenCount") || "0";
+  count = parseInt(count, 10) + 1;
+  localStorage.setItem("siteOpenCount", count);
+  countElement.textContent = count;
+}
+
 function initUI() {
   if (!statsGrid || !calcBtn || !resetBtn || typeof document.createElement !== "function") {
     return;
@@ -633,6 +645,8 @@ function initUI() {
 
   calcBtn.addEventListener("click", onCalculate);
   resetBtn.addEventListener("click", resetFields);
+  
+  incrementOpenCounter();
 }
 
 initUI();
