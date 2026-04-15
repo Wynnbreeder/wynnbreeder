@@ -210,6 +210,8 @@ function createInputRow(stat) {
   ist.min = "0";
   ist.step = "1";
   ist.value = "0";
+  ist.autocomplete = "off";
+  ist.setAttribute("data-form-type", "other");
 
   const soll = document.createElement("input");
   soll.type = "number";
@@ -217,6 +219,8 @@ function createInputRow(stat) {
   soll.min = "0";
   soll.step = "1";
   soll.value = "0";
+  soll.autocomplete = "off";
+  soll.setAttribute("data-form-type", "other");
 
   row.appendChild(label);
   row.appendChild(ist);
@@ -257,78 +261,176 @@ function optimizeMaterials(need, materials) {
     return { count: 0, path: [] };
   }
 
-  const startState = need.slice();
-  const startKey = toStateKey(startState);
-  const visited = new Set([startKey]);
-  const parent = new Map();
-  const queue = [startState];
-  let head = 0;
-  let solvedKey = null;
-
-  while (head < queue.length) {
-    const state = queue[head];
-    head += 1;
-    const stateKey = toStateKey(state);
-
-    for (const material of normalizedMaterials) {
-      let changed = false;
-      let allZero = true;
-      const nextState = new Array(statCount);
-
-      for (let i = 0; i < statCount; i += 1) {
-        const reduced = state[i] - material.bonusVector[i];
-        const nextValue = reduced > 0 ? reduced : 0;
-        nextState[i] = nextValue;
-        if (nextValue !== state[i]) {
-          changed = true;
-        }
-        if (nextValue !== 0) {
-          allZero = false;
-        }
+  const maxPerStat = new Array(statCount).fill(0);
+  for (const material of normalizedMaterials) {
+    for (let i = 0; i < statCount; i += 1) {
+      if (material.bonusVector[i] > maxPerStat[i]) {
+        maxPerStat[i] = material.bonusVector[i];
       }
+    }
+  }
 
-      if (!changed) {
-        continue;
-      }
+  for (let i = 0; i < statCount; i += 1) {
+    if (need[i] > 0 && maxPerStat[i] === 0) {
+      return { count: INF, path: null };
+    }
+  }
 
-      const nextKey = toStateKey(nextState);
-      if (visited.has(nextKey)) {
-        continue;
-      }
-
-      visited.add(nextKey);
-      parent.set(nextKey, { prevKey: stateKey, material: material.name });
-
-      if (allZero) {
-        solvedKey = nextKey;
+  const greedyCounts = new Array(normalizedMaterials.length).fill(0);
+  const remaining = need.slice();
+  let greedySteps = 0;
+  const maxGreedySteps = 2000;
+  while (greedySteps < maxGreedySteps) {
+    let allCovered = true;
+    for (let i = 0; i < statCount; i += 1) {
+      if (remaining[i] > 0) {
+        allCovered = false;
         break;
       }
-
-      queue.push(nextState);
+    }
+    if (allCovered) {
+      break;
     }
 
-    if (solvedKey !== null) {
+    let bestIndex = -1;
+    let bestScore = -1;
+    for (let m = 0; m < normalizedMaterials.length; m += 1) {
+      let score = 0;
+      for (let i = 0; i < statCount; i += 1) {
+        const contribution = normalizedMaterials[m].bonusVector[i];
+        if (remaining[i] > 0 && contribution > 0) {
+          score += Math.min(remaining[i], contribution);
+        }
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = m;
+      }
+    }
+
+    if (bestIndex < 0 || bestScore <= 0) {
+      return { count: INF, path: null };
+    }
+
+    greedyCounts[bestIndex] += 1;
+    greedySteps += 1;
+    for (let i = 0; i < statCount; i += 1) {
+      remaining[i] = Math.max(0, remaining[i] - normalizedMaterials[bestIndex].bonusVector[i]);
+    }
+  }
+
+  if (greedySteps >= maxGreedySteps) {
+    return { count: INF, path: null };
+  }
+
+  let lowerBound = 0;
+  for (let i = 0; i < statCount; i += 1) {
+    if (need[i] > 0) {
+      lowerBound = Math.max(lowerBound, Math.ceil(need[i] / maxPerStat[i]));
+    }
+  }
+  const upperBound = greedySteps;
+
+  const perIndexMax = new Array(normalizedMaterials.length + 1);
+  perIndexMax[normalizedMaterials.length] = new Array(statCount).fill(0);
+  for (let idx = normalizedMaterials.length - 1; idx >= 0; idx -= 1) {
+    const current = normalizedMaterials[idx].bonusVector;
+    const next = perIndexMax[idx + 1];
+    const merged = new Array(statCount);
+    for (let i = 0; i < statCount; i += 1) {
+      merged[i] = Math.max(current[i], next[i]);
+    }
+    perIndexMax[idx] = merged;
+  }
+
+  const counts = new Array(normalizedMaterials.length).fill(0);
+  let solvedCounts = null;
+
+  function canStillReach(coverage, materialIndex, slotsLeft) {
+    const maxFromHere = perIndexMax[materialIndex];
+    for (let i = 0; i < statCount; i += 1) {
+      if (coverage[i] >= need[i]) {
+        continue;
+      }
+      if (maxFromHere[i] === 0) {
+        return false;
+      }
+      const remainingNeed = need[i] - coverage[i];
+      if (remainingNeed > slotsLeft * maxFromHere[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function meetsNeed(coverage) {
+    for (let i = 0; i < statCount; i += 1) {
+      if (coverage[i] < need[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function search(materialIndex, slotsLeft, coverage) {
+    if (materialIndex === normalizedMaterials.length) {
+      return slotsLeft === 0 && meetsNeed(coverage);
+    }
+
+    if (!canStillReach(coverage, materialIndex, slotsLeft)) {
+      return false;
+    }
+
+    const material = normalizedMaterials[materialIndex];
+    for (let take = slotsLeft; take >= 0; take -= 1) {
+      counts[materialIndex] = take;
+      const nextCoverage = new Array(statCount);
+      for (let i = 0; i < statCount; i += 1) {
+        nextCoverage[i] = coverage[i] + take * material.bonusVector[i];
+      }
+
+      if (search(materialIndex + 1, slotsLeft - take, nextCoverage)) {
+        return true;
+      }
+    }
+
+    counts[materialIndex] = 0;
+    return false;
+  }
+
+  for (let total = lowerBound; total <= upperBound; total += 1) {
+    for (let i = 0; i < counts.length; i += 1) {
+      counts[i] = 0;
+    }
+
+    if (search(0, total, new Array(statCount).fill(0))) {
+      solvedCounts = counts.slice();
       break;
     }
   }
 
-  if (solvedKey === null) {
+  if (solvedCounts === null) {
     return { count: INF, path: null };
   }
 
   const path = [];
-  let cursor = solvedKey;
-  while (cursor !== startKey) {
-    const step = parent.get(cursor);
-    if (!step) {
-      return { count: INF, path: null };
+  for (let i = 0; i < solvedCounts.length; i += 1) {
+    for (let c = 0; c < solvedCounts[i]; c += 1) {
+      path.push(normalizedMaterials[i].name);
     }
-    path.push(step.material);
-    cursor = step.prevKey;
   }
 
-  path.reverse();
   return { count: path.length, path };
+}
+
+function getErrorMessage(err) {
+  if (err instanceof Error && typeof err.message === "string" && err.message.length > 0) {
+    return err.message;
+  }
+  if (typeof err === "string" && err.length > 0) {
+    return err;
+  }
+  return "Unexpected error while calculating. Please try smaller values or reload the page.";
 }
 
 function getHighestStat(ist) {
@@ -510,7 +612,7 @@ async function onCalculate() {
     }
   } catch (err) {
     if (output) {
-      output.textContent = `Invalid Input:\n${err.message}`;
+      output.textContent = `Invalid Input:\n${getErrorMessage(err)}`;
     }
   } finally {
     if (calcBtn) {
