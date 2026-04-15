@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://1337x2.github.io/wynnbreeder/sitemap.xml
+Sitemap: https://wynnbreeder.github.io/wynnbreeder/sitemap.xml
