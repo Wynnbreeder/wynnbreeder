@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wynncraft Mount Material Calculator</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="header">
+        <h1>Wynncraft Mount Material Calculator</h1>
+        <p>Input Limit and Max Values</p>
+      </header>
+
+      <section class="layout">
+        <section class="card inputs-card">
+          <div class="table-head">
+            <span>Stat</span>
+            <span>Limit</span>
+            <span>Max</span>
+          </div>
+          <div id="statsGrid" class="stats-grid"></div>
+
+          <div class="actions">
+            <button id="calcBtn" type="button">Calculate</button>
+            <button id="resetBtn" type="button" class="secondary">Reset</button>
+          </div>
+        </section>
+
+        <section class="card help-card">
+          <h2>Help</h2>
+          <div class="help-content">
+            <p>Requirements for Breeding:</p>
+            <ul>
+              <li>The first mount must have an average stat limit of at least 20 (no rounding up).</li>
+              <li>Two mount saddles are required.</li>
+            </ul>
+
+            <p>Process:</p>
+            <ul>
+              <li>Place both mounts in the Feeder Interface (one on the left, one in the food tray).</li>
+              <li>Breeding takes 6 hours, both parents are consumed.</li>
+              <li>A new mount is created in the slot of the first parent.</li>
+            </ul>
+
+            <p>Values of the Offspring:</p>
+            <ul>
+              <li>The offspring's current level will be based off of the higher of the two parents' own current levels, with some random variance applied to it. </li>
+              <li>Limits are based on the average of both parents plus bonus and randomization.</li>
+              <li>Limit values of the parents are irrelevant.</li>
+            </ul>
+
+            <p>Strategy:</p>
+            <ul>
+              <li>To maximize potential gain for an offspring, you should feed both parents until their limits are maxed out, and minimize the limit difference between them. Breeding mounts with a large limit difference between them can result in an offspring that is worse than the higher-limit parent used to breed it.</li>
+            </ul>
+          </div>
+        </section>
+      </section>
+
+      <section class="card output-card">
+        <h2>Result</h2>
+        <pre id="output" aria-live="polite"></pre>
+      </section>
+    </main>
+
+    <div id="loadingPopup" class="loading-popup" aria-live="polite" aria-hidden="true">
+      <div class="loading-popup__box">Finding best combination...</div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
